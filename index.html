@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مصمّم القصص بالذكاء</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fdf6ec;--card:#fff;--ink:#2d2a3e;--mute:#6f6a85;--acc:#7c5cff;--line:#e6dccb}
+@media(prefers-color-scheme:dark){:root{--bg:#1b1a26;--card:#262438;--ink:#f1eefc;--mute:#a9a4c4;--acc:#9b83ff;--line:#3a3752}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Cairo',system-ui,sans-serif;line-height:1.6}
+main{max-width:1000px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:30px;margin:8px 0 2px;font-weight:900}
+.sub{color:var(--mute);margin:0 0 18px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}
+textarea{width:100%;min-height:130px;border:1px solid var(--line);border-radius:12px;padding:12px;font:inherit;background:transparent;color:inherit;resize:vertical}
+button,select{font:inherit}
+button{font-weight:700;border:0;border-radius:12px;padding:10px 18px;background:var(--acc);color:#fff;cursor:pointer}
+button.alt{background:transparent;color:var(--ink);border:1px solid var(--line);padding:6px 12px;font-size:13px}
+button:disabled{opacity:.5;cursor:wait}
+select{padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+#st{color:var(--mute);margin-top:10px;min-height:24px}
+#pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px;margin-top:18px}
+.pg{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:12px}
+.fr{position:relative;aspect-ratio:3/4;border-radius:12px;overflow:hidden;background:#ddd}
+.fr img{width:100%;height:100%;object-fit:cover;display:block}
+.fr .ld{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#555;font-weight:700;background:#eee8}
+.tx{position:absolute;left:5%;right:5%;bottom:4%;background:#fffd;border-radius:16px;padding:10px 12px;text-align:center;color:#2d2a3e;font-weight:700;font-size:15px;outline:none}
+.tx.cv{font-size:22px;font-weight:900}
+.pg .row button{flex:1}
+.pr{width:100%;min-height:80px;margin-top:8px;font-size:12px;direction:ltr;display:none}
+@media print{body{background:#fff}main>*:not(#pages){display:none}#pages{display:block}.pg{page-break-after:always;border:0;padding:0}.pg .row,.pr{display:none!important}}
+</style>
+</head>
+<body>
+<main>
+<h1>🎨 مصمّم القصص بالذكاء</h1>
+<p class="sub">الصق القصة، يفهمها ويقسمها لصفحات ويولّد صورة لكل صفحة بأسلوب رسم، وبعدها عدّل وحمّل.</p>
+<div class="box">
+<textarea id="src" placeholder="اكتب أو الصق قصتك هنا…"></textarea>
+<div class="row">
+<button id="go">✨ صمّم لي</button>
+<select id="sty">
+<option value="soft watercolor children's book illustration, gentle pastel colors, visible paper texture, hand-painted, cute">مائي ناعم</option>
+<option value="cute flat cartoon children's book illustration, bright cheerful colors, clean lines">كرتون ملوّن</option>
+<option value="dreamy pastel crayon illustration for kids, warm golden light, storybook">باستيل حالم</option>
+</select>
+<button class="alt" id="pdf">🖨 حفظ كل الصفحات PDF</button>
+</div>
+<div id="st"></div>
+</div>
+<div id="pages"></div>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+let S=null;
+const SYS=`You are a children's picture-book art director. Read the story (any language). Reply with JSON only: {"title":"title in the story's language","characters":[{"name":"","look":"fixed English visual description: species/age, face, hair/fur, clothes, exact colors"}],"pages":[{"text":"short page text (max 30 words) in the story's language","scene":"English description of what is drawn: setting, action, mood, which characters"}]}. Use 4 to 6 pages. Keep the story's meaning. Do not mention text or words in scenes.`;
+
+function localSplit(t){
+ const ps=t.split(/\n+/).map(x=>x.trim()).filter(Boolean);let ch=ps.length>=3?ps:t.split(/(?<=[.!؟?])\s+/).filter(Boolean);
+ while(ch.length>6){const m=Math.ceil(ch.length/6);ch=ch.reduce((a,x,i)=>{i%m?a[a.length-1]+=' '+x:a.push(x);return a},[])}
+ return {title:ch[0].slice(0,40),characters:[],pages:ch.map(x=>({text:x,scene:x}))};
+}
+async function analyze(t){
+ try{
+  const r=await fetch('https://text.pollinations.ai/openai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'openai',response_format:{type:'json_object'},messages:[{role:'system',content:SYS},{role:'user',content:t}]})});
+  const j=await r.json();const o=JSON.parse(j.choices[0].message.content);
+  if(o.pages&&o.pages.length)return o;
+ }catch(e){}
+ $('#st').textContent='تعذّر التحليل الذكي، استخدمت تقسيماً بسيطاً للنص.';
+ return localSplit(t);
+}
+function prompt(i){
+ const pg=i===0?{scene:S.cover}:S.pages[i-1], chars=S.characters.map(c=>c.name+': '+c.look).join('. ');
+ return pg.custom||`${S.style}. ${chars?'Characters (keep identical in every picture): '+chars+'. ':''}Scene: ${pg.scene}. Vertical composition, main subject in the upper two thirds, calm empty space at the bottom, no text, no letters, no watermark.`;
+}
+function url(i){return 'https://image.pollinations.ai/prompt/'+encodeURIComponent(prompt(i))+'?width=768&height=1024&model=flux&nologo=true&seed='+(S.seeds[i]??S.seed)}
+function render(){
+ const items=[{text:S.title,cv:1},...S.pages];
+ $('#pages').innerHTML=items.map((p,i)=>`<div class="pg" data-i="${i}"><div class="fr"><img crossorigin="anonymous" src="${url(i)}"><div class="ld">جاري الرسم…</div><div class="tx ${p.cv?'cv':''}" contenteditable>${p.text.replace(/</g,'&lt;')}</div></div>
+ <textarea class="pr"></textarea><div class="row"><button class="alt" data-a="re">🔄 صورة جديدة</button><button class="alt" data-a="pr">✏ الوصف</button><button class="alt" data-a="dl">⬇ PNG</button></div></div>`).join('');
+ document.querySelectorAll('.fr img').forEach(im=>{im.onload=()=>im.nextElementSibling.remove();im.onerror=()=>{im.nextElementSibling.textContent='تعذّر التحميل، اضغط صورة جديدة'}});
+}
+$('#go').onclick=async()=>{
+ const t=$('#src').value.trim();if(!t)return;
+ $('#go').disabled=true;$('#st').textContent='جاري قراءة القصة وتحليلها…';
+ const o=await analyze(t);
+ S={title:o.title||'قصتي',characters:o.characters||[],pages:(o.pages||[]).slice(0,6),style:$('#sty').value,seed:Math.floor(Math.random()*1e6),seeds:{}};
+ S.cover='Book cover scene: '+(S.pages[0]?.scene||S.title)+', title page feel, inviting';
+ render();$('#go').disabled=false;if($('#st').textContent.startsWith('جاري'))$('#st').textContent='جاهز ✅ الصور تنزل واحدة واحدة (قد تأخذ نصف دقيقة).';
+};
+$('#pages').addEventListener('click',async e=>{
+ const b=e.target.closest('button');if(!b)return;const card=b.closest('.pg'),i=+card.dataset.i,a=b.dataset.a;
+ if(a==='re'){S.seeds[i]=Math.floor(Math.random()*1e6);const im=card.querySelector('img');if(!im.nextElementSibling)im.insertAdjacentHTML('afterend','<div class="ld">جاري الرسم…</div>');im.src=url(i)}
+ if(a==='pr'){const t=card.querySelector('.pr');if(t.style.display==='block'){const v=t.value.trim();(i===0?S:S.pages[i-1]).custom=v||undefined;t.style.display='none';b.textContent='✏ الوصف';b.nextElementSibling;card.querySelector('[data-a=re]').click()}else{t.value=prompt(i);t.style.display='block';b.textContent='✔ طبّق'}}
+ if(a==='dl'){
+  try{const im=card.querySelector('img'),c=document.createElement('canvas');c.width=768;c.height=1024;const x=c.getContext('2d');x.drawImage(im,0,0,768,1024);
+   const tx=card.querySelector('.tx').innerText,cv=i===0,fs=cv?44:30;x.font=`${cv?900:700} ${fs}px Cairo,sans-serif`;x.direction='rtl';x.textAlign='center';
+   const L=[];let cur='';tx.split(/\s+/).forEach(w=>{if(x.measureText((cur+' '+w).trim()).width>650){L.push(cur);cur=w}else cur=(cur+' '+w).trim()});L.push(cur);
+   const h=L.length*fs*1.5+40,y0=1024-h-36;x.fillStyle='rgba(255,255,255,.88)';x.beginPath();x.roundRect(40,y0,688,h,28);x.fill();x.fillStyle='#2d2a3e';
+   L.forEach((l,k)=>x.fillText(l,384,y0+20+fs*1.1+k*fs*1.5));
+   const a2=document.createElement('a');a2.href=c.toDataURL('image/png');a2.download=(cv?'cover':'page-'+i)+'.png';a2.click();
+  }catch(err){$('#st').textContent='التحميل المباشر ما اشتغل لهذي الصورة. اضغط مطوّلاً (أو كليك يمين) على الصورة واحفظها، أو استخدم زر PDF.'}
+ }
+});
+$('#pdf').onclick=()=>window.print();
+</script>
+</body>
+</html>
